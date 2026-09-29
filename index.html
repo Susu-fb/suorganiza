@@ -1,0 +1,2072 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuOrganiza - Controle Financeiro Pessoal</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        // COLE AQUI as duas informações do seu projeto Supabase.
+        // Elas serão fornecidas pelo painel do Supabase em Project Settings > API.
+        const SUPABASE_URL = 'https://towlwhzcjbkkxsgjasol.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_PWUam8IHNAd63sMZAlFWhw_cOlJPvCM';
+        const supabaseClient = (SUPABASE_URL.startsWith('http') && !SUPABASE_ANON_KEY.startsWith('COLE_'))
+            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+            : null;
+    </script>
+    <!-- Vue 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        [v-cloak] { display: none !important; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="h-full text-slate-800 antialiased selection:bg-emerald-500 selection:text-white">
+    <div id="app" v-cloak class="min-h-screen flex flex-col md:flex-row bg-slate-50 relative">
+
+        <!-- Mobile Header Bar -->
+        <header class="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center sticky top-0 z-40 shadow-md">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-500/30">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+                <span class="font-bold text-lg tracking-tight text-white">SuOrganiza</span>
+            </div>
+            <button @click="mobileMenuOpen = !mobileMenuOpen" class="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800">
+                <i class="fa-solid" :class="mobileMenuOpen ? 'fa-xmark text-xl' : 'fa-bars text-xl'"></i>
+            </button>
+        </header>
+
+        <!-- Sidebar Navigation -->
+        <aside :class="mobileMenuOpen ? 'block' : 'hidden md:block'" 
+               class="w-full md:w-64 bg-slate-900 text-slate-300 flex-shrink-0 flex flex-col justify-between z-30 transition-all duration-300 min-h-screen md:sticky md:top-0 md:h-screen">
+            <div>
+                <!-- App Brand -->
+                <div class="p-6 hidden md:flex items-center space-x-3 border-b border-slate-800">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center font-bold text-white shadow-lg shadow-emerald-500/20">
+                        <i class="fa-solid fa-wallet text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg tracking-tight text-white leading-none">SuOrganiza</h1>
+                        <span class="text-xs text-slate-400 font-medium">Gestão Financeira</span>
+                    </div>
+                </div>
+
+                <!-- Profile Badge & User Switcher in Sidebar -->
+                <div class="p-4 mx-3 my-4 bg-slate-800/80 rounded-2xl border border-slate-700/50 flex items-center justify-between">
+                    <div class="flex items-center space-x-3 truncate">
+                        <div class="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold flex items-center justify-center border border-emerald-500/30 flex-shrink-0">
+                            {{ getUserInitials() }}
+                        </div>
+                        <div class="truncate">
+                            <span class="text-[10px] uppercase font-bold text-emerald-400 tracking-wider block">Perfil Ativo</span>
+                            <span class="text-sm font-semibold text-white truncate block">{{ user.name || 'Sem Usuário' }}</span>
+                        </div>
+                    </div>
+                    <button @click="openSwitchUserModal" title="Trocar ou Criar Perfil" class="bg-slate-700 hover:bg-emerald-600 hover:text-white text-slate-300 p-2 rounded-xl transition-all shadow-sm">
+                        <i class="fa-solid fa-users-gear text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Navigation Links -->
+                <nav class="px-3 space-y-1 mt-2">
+                    <button v-for="item in navItems" :key="item.id"
+                            @click="activeTab = item.id; mobileMenuOpen = false"
+                            :class="activeTab === item.id 
+                                ? 'bg-emerald-600 text-white font-semibold shadow-md shadow-emerald-900/20' 
+                                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'"
+                            class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all text-sm group">
+                        <i :class="[item.icon, 'text-base w-5 text-center', activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200']"></i>
+                        <span>{{ item.label }}</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
+                SuOrganiza v2.5 &bull; Isolated Multi-User
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col min-w-0 overflow-y-auto custom-scrollbar">
+            
+            <!-- Top Controls Bar -->
+            <header class="bg-white border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sticky top-0 z-20 shadow-sm">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900 capitalize">{{ currentTabTitle }}</h2>
+                    <p class="text-xs text-slate-500">Acompanhe seu fluxo de caixa e alcance sua independência financeira.</p>
+                </div>
+
+                <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+                    <!-- Global Month Selector -->
+                    <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                        <button @click="changeMonth(-1)" class="p-2 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                            <i class="fa-solid fa-chevron-left text-xs"></i>
+                        </button>
+                        <span class="px-3 text-xs font-semibold text-slate-700 min-w-[110px] text-center">
+                            {{ formattedSelectedMonth }}
+                        </span>
+                        <button @click="changeMonth(1)" class="p-2 hover:bg-white rounded-lg text-slate-600 hover:text-slate-900 transition-all">
+                            <i class="fa-solid fa-chevron-right text-xs"></i>
+                        </button>
+                    </div>
+
+                    <!-- Quick Add Button -->
+                    <button @click="openAddModal('receita')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-3.5 py-2.5 rounded-xl shadow-sm hover:shadow flex items-center space-x-2 transition-all">
+                        <i class="fa-solid fa-plus"></i>
+                        <span class="hidden sm:inline">Novo Lançamento</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Dynamic Body Views -->
+            <div class="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+
+                <div v-if="activeTab === 'inicio'" class="space-y-6">
+                    <!-- Welcome Banner -->
+                    <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-emerald-950 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+                        <div class="absolute -right-10 -bottom-10 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                            <div>
+                                <span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider">
+                                    Resumo Financeiro
+                                </span>
+                                <h3 class="text-2xl sm:text-3xl font-extrabold mt-3">Olá, {{ user.name || 'Investidor(a)' }}! 👋</h3>
+                                <p class="text-slate-300 text-sm mt-1 max-w-xl">
+                                    Aqui está a visão consolidada das suas finanças para <strong class="text-emerald-400 font-semibold">{{ formattedSelectedMonth }}</strong>.
+                                </p>
+                            </div>
+                            <div class="flex gap-3">
+                                <button @click="openInvestModal()" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs sm:text-sm px-4 py-3 rounded-2xl shadow-lg transition-all flex items-center space-x-2">
+                                    <i class="fa-solid fa-percent"></i>
+                                    <span>Simular Aporte / % Investir</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary KPI Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                        <!-- Total Balance Card -->
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all">
+                            <div class="flex justify-between items-center text-slate-500 mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-wider">Saldo Líquido</span>
+                                <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                                    <i class="fa-solid fa-scale-balanced text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-bold" :class="monthlyBalance >= 0 ? 'text-slate-900' : 'text-rose-600'">
+                                {{ formatCurrency(monthlyBalance) }}
+                            </div>
+                            <div class="mt-2 text-xs text-slate-500 flex items-center space-x-1">
+                                <span>Entradas - Saídas no mês</span>
+                            </div>
+                        </div>
+
+                        <!-- Incomes Card -->
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all">
+                            <div class="flex justify-between items-center text-slate-500 mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-wider">Total de Entradas</span>
+                                <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                                    <i class="fa-solid fa-arrow-down-left text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-bold text-emerald-600">
+                                {{ formatCurrency(monthlyIncome) }}
+                            </div>
+                            <div class="mt-2 text-xs text-slate-500">
+                                {{ monthlyIncomeCount }} receita(s) registrada(s)
+                            </div>
+                        </div>
+
+                        <!-- Expenses Card -->
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all">
+                            <div class="flex justify-between items-center text-slate-500 mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-wider">Total de Saídas</span>
+                                <div class="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                                    <i class="fa-solid fa-arrow-up-right text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-bold text-rose-600">
+                                {{ formatCurrency(monthlyExpenses) }}
+                            </div>
+                            <div class="mt-2 text-xs text-slate-500">
+                                Fixas: {{ formatCurrency(monthlyFixedExpenses) }} | Var: {{ formatCurrency(monthlyVariableExpenses) }}
+                            </div>
+                        </div>
+
+                        <!-- Savings Rate Card -->
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all">
+                            <div class="flex justify-between items-center text-slate-500 mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-wider">Taxa de Poupança</span>
+                                <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                    <i class="fa-solid fa-piggy-bank text-sm"></i>
+                                </div>
+                            </div>
+                            <div class="text-2xl font-bold text-indigo-600">
+                                {{ savingsRate.toFixed(1) }}%
+                            </div>
+                            <div class="mt-2 text-xs text-slate-500">
+                                Da renda poupada / investida
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <button @click="openAddModal('receita')" class="p-4 bg-white hover:bg-emerald-50/50 border border-slate-200 rounded-2xl text-left transition-all group">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-plus text-xs"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-800 block">Nova Receita</span>
+                            <span class="text-[10px] text-slate-500 block">Salário, Extra, Outro</span>
+                        </button>
+                        <button @click="openAddModal('despesa')" class="p-4 bg-white hover:bg-rose-50/50 border border-slate-200 rounded-2xl text-left transition-all group">
+                            <div class="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-minus text-xs"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-800 block">Nova Despesa</span>
+                            <span class="text-[10px] text-slate-500 block">Fixa ou Variável</span>
+                        </button>
+                        <button @click="openInvestModal()" class="p-4 bg-white hover:bg-indigo-50/50 border border-slate-200 rounded-2xl text-left transition-all group">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-chart-line text-xs"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-800 block">Calculadora % Investir</span>
+                            <span class="text-[10px] text-slate-500 block">Definir porcentagem</span>
+                        </button>
+                        <button @click="openImportModal" class="p-4 bg-white hover:bg-amber-50/50 border border-slate-200 rounded-2xl text-left transition-all group">
+                            <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-file-import text-xs"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-800 block">Importar Extrato</span>
+                            <span class="text-[10px] text-slate-500 block">Ler arquivo CSV</span>
+                        </button>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-bold text-slate-900 text-sm">Evolução Mensal (Receitas vs Despesas)</h4>
+                                <span class="text-xs text-slate-400">Últimos meses</span>
+                            </div>
+                            <div class="h-64 relative">
+                                <canvas id="monthlyEvolutionChart"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="flex justify-between items-center mb-4">
+                                <h4 class="font-bold text-slate-900 text-sm">Despesas por Categoria</h4>
+                                <span class="text-xs text-slate-400">Neste mês</span>
+                            </div>
+                            <div class="h-64 relative flex items-center justify-center">
+                                <canvas id="categoryPieChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Transactions Preview -->
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                            <h4 class="font-bold text-slate-900 text-sm">Últimos Lançamentos</h4>
+                            <button @click="activeTab = 'historico'" class="text-xs text-emerald-600 hover:text-emerald-700 font-semibold">
+                                Ver Todos <i class="fa-solid fa-arrow-right ml-1"></i>
+                            </button>
+                        </div>
+                        <div class="divide-y divide-slate-100">
+                            <div v-for="item in recentFilteredTransactions" :key="item.id" class="p-4 hover:bg-slate-50 transition-colors flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div :class="item.type === 'receita' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'" class="w-10 h-10 rounded-xl flex items-center justify-center font-bold">
+                                        <i :class="getCategoryIcon(item.category)"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-sm font-semibold text-slate-900">{{ item.description }}</h5>
+                                        <div class="flex items-center space-x-2 text-xs text-slate-500 mt-0.5">
+                                            <span>{{ formatDate(item.date) }}</span>
+                                            <span>&bull;</span>
+                                            <span class="font-medium text-slate-600">{{ item.category }}</span>
+                                            <span v-if="item.incomeType" class="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[10px]">
+                                                {{ item.incomeType }}
+                                            </span>
+                                            <span v-if="item.type === 'despesa'" :class="item.isFixed ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'" class="px-1.5 py-0.5 rounded text-[10px]">
+                                                {{ item.isFixed ? 'Fixa (Venc: ' + (item.dueDate || '10') + ')' : 'Variável' }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span :class="item.type === 'receita' ? 'text-emerald-600' : 'text-rose-600'" class="font-bold text-sm block">
+                                        {{ item.type === 'receita' ? '+' : '-' }} {{ formatCurrency(item.amount) }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div v-if="recentFilteredTransactions.length === 0" class="p-8 text-center text-slate-400 text-sm">
+                                Nenhum lançamento registrado para este mês.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'historico'" class="space-y-6">
+                    <!-- Actions & Filters Bar -->
+                    <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                        <div class="flex flex-col md:flex-row justify-between gap-4">
+                            <!-- Search -->
+                            <div class="relative flex-1">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+                                <input v-model="filters.search" type="text" placeholder="Buscar por descrição ou categoria..." class="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            </div>
+
+                            <!-- Buttons Bar -->
+                            <div class="flex flex-wrap items-center gap-2">
+                                <button @click="exportToExcel" class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded-xl transition-all flex items-center space-x-1.5 border border-emerald-200/60 shadow-sm">
+                                    <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                                    <span>Exportar Excel</span>
+                                </button>
+                                <button @click="openImportModal" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all flex items-center space-x-1.5">
+                                    <i class="fa-solid fa-file-import"></i>
+                                    <span>Importar Extrato</span>
+                                </button>
+                                <button @click="confirmClearAll" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl transition-all flex items-center space-x-1.5">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                    <span>Limpar Lançamentos</span>
+                                </button>
+                                <button @click="openAddModal('receita')" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition-all flex items-center space-x-1.5">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Adicionar</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Filter Chips & Dropdowns -->
+                        <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
+                            <span class="text-xs font-semibold text-slate-500 flex items-center">
+                                <i class="fa-solid fa-filter mr-1.5 text-slate-400"></i> Filtrar Despesas:
+                            </span>
+
+                            <select v-model="filters.type" class="bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-3 focus:ring-2 focus:ring-emerald-500">
+                                <option value="todos">Todos os Tipos</option>
+                                <option value="receita">Apenas Receitas</option>
+                                <option value="despesa">Apenas Despesas</option>
+                                <option value="fixa">Despesas Fixas</option>
+                                <option value="variavel">Despesas Variáveis</option>
+                            </select>
+
+                            <select v-model="filters.category" class="bg-slate-50 border border-slate-200 rounded-lg text-xs py-1.5 px-3 focus:ring-2 focus:ring-emerald-500">
+                                <option value="todas">Todas Categorias</option>
+                                <option v-for="cat in allCategories" :key="cat" :value="cat">{{ cat }}</option>
+                            </select>
+
+                            <button v-if="filters.search || filters.type !== 'todos' || filters.category !== 'todas'" @click="resetFilters" class="text-xs text-rose-600 hover:underline">
+                                Limpar Filtros
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Transactions Table -->
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                        <th class="p-4">Data</th>
+                                        <th class="p-4">Descrição</th>
+                                        <th class="p-4">Categoria</th>
+                                        <th class="p-4">Tipo / Detalhes</th>
+                                        <th class="p-4 text-right">Valor</th>
+                                        <th class="p-4 text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 text-sm">
+                                    <tr v-for="tx in filteredTransactions" :key="tx.id" class="hover:bg-slate-50 transition-colors">
+                                        <td class="p-4 whitespace-nowrap text-slate-600 font-medium">
+                                            {{ formatDate(tx.date) }}
+                                        </td>
+                                        <td class="p-4 text-slate-900 font-semibold">
+                                            {{ tx.description }}
+                                        </td>
+                                        <td class="p-4 text-slate-600 whitespace-nowrap">
+                                            <span class="inline-flex items-center space-x-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-xs font-medium">
+                                                <i :class="getCategoryIcon(tx.category)" class="text-slate-500"></i>
+                                                <span>{{ tx.category }}</span>
+                                            </span>
+                                        </td>
+                                        <td class="p-4 whitespace-nowrap">
+                                            <span v-if="tx.type === 'receita'" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg text-xs font-medium">
+                                                Receita ({{ tx.incomeType || 'Geral' }})
+                                            </span>
+                                            <span v-else-if="tx.isFixed" class="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-lg text-xs font-medium">
+                                                Fixa (Venc: dia {{ tx.dueDate || '10' }})
+                                            </span>
+                                            <span v-else class="bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-lg text-xs font-medium">
+                                                Variável
+                                            </span>
+                                        </td>
+                                        <td class="p-4 text-right whitespace-nowrap font-bold" :class="tx.type === 'receita' ? 'text-emerald-600' : 'text-rose-600'">
+                                            {{ tx.type === 'receita' ? '+' : '-' }} {{ formatCurrency(tx.amount) }}
+                                        </td>
+                                        <td class="p-4 text-center whitespace-nowrap space-x-2">
+                                            <button @click="openEditModal(tx)" title="Editar" class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-all">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <button @click="deleteTransaction(tx.id)" title="Excluir" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-all">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="filteredTransactions.length === 0">
+                                        <td colspan="6" class="p-8 text-center text-slate-400">
+                                            Nenhum lançamento registrado para os filtros selecionados.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'orcamento'" class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Planejamento de Orçamento Mensal</h3>
+                            <p class="text-xs text-slate-500">Defina limites para cada categoria e evite estourar suas contas.</p>
+                        </div>
+                        <button @click="openBudgetModal" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-3.5 py-2.5 rounded-xl transition-all">
+                            <i class="fa-solid fa-plus mr-1"></i> Configurar Limite
+                        </button>
+                    </div>
+
+                    <div v-if="budgets.length === 0" class="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-3">
+                        <i class="fa-solid fa-wallet text-3xl text-slate-300"></i>
+                        <p class="text-sm">Nenhum limite de orçamento configurado para este usuário.</p>
+                        <button @click="openBudgetModal" class="text-xs bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl">
+                            + Adicionar Primeiro Limite
+                        </button>
+                    </div>
+
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div v-for="b in budgets" :key="b.category" class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <div class="flex justify-between items-center mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+                                        <i :class="getCategoryIcon(b.category)"></i>
+                                    </div>
+                                    <h4 class="font-bold text-slate-800 text-sm">{{ b.category }}</h4>
+                                </div>
+                                <span class="text-xs font-semibold px-2 py-1 rounded-lg" :class="getBudgetStatusClass(b)">
+                                    {{ getSpentByCategory(b.category) > b.limit ? 'Estourado' : 'Dentro do limite' }}
+                                </span>
+                            </div>
+
+                            <div class="space-y-2 mt-4">
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-500">Gasto: <strong class="text-slate-800">{{ formatCurrency(getSpentByCategory(b.category)) }}</strong></span>
+                                    <span class="text-slate-500">Teto: <strong class="text-slate-800">{{ formatCurrency(b.limit) }}</strong></span>
+                                </div>
+                                <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                                    <div class="h-full transition-all duration-500" 
+                                         :style="{ width: Math.min((getSpentByCategory(b.category) / (b.limit || 1)) * 100, 100) + '%' }"
+                                         :class="getBudgetBarColor(b)">
+                                    </div>
+                                </div>
+                                <div class="text-[11px] text-right text-slate-400">
+                                    {{ ((getSpentByCategory(b.category) / (b.limit || 1)) * 100).toFixed(0) }}% utilizado
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'metas'" class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Suas Metas Financeiras</h3>
+                            <p class="text-xs text-slate-500">Junte dinheiro para seus objetivos de curto, médio e longo prazo.</p>
+                        </div>
+                        <button @click="openAddGoalModal" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs px-3.5 py-2.5 rounded-xl transition-all">
+                            <i class="fa-solid fa-plus mr-1"></i> Nova Meta
+                        </button>
+                    </div>
+
+                    <div v-if="goals.length === 0" class="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-400 space-y-3">
+                        <i class="fa-solid fa-bullseye text-3xl text-slate-300"></i>
+                        <p class="text-sm">Nenhuma meta financeira cadastrada para este usuário.</p>
+                        <button @click="openAddGoalModal" class="text-xs bg-emerald-600 text-white font-bold px-4 py-2 rounded-xl">
+                            + Criar Primeira Meta
+                        </button>
+                    </div>
+
+                    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div v-for="goal in goals" :key="goal.id" class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                            <div class="flex justify-between items-start">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+                                        <i :class="goal.icon || 'fa-solid fa-bullseye'"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-bold text-slate-900">{{ goal.title }}</h4>
+                                        <span class="text-xs text-slate-400">Prazo: {{ goal.deadline || 'Indefinido' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1">
+                                <div class="flex justify-between text-xs font-semibold">
+                                    <span class="text-slate-500">Acumulado</span>
+                                    <span class="text-slate-900">{{ formatCurrency(goal.currentAmount) }} / {{ formatCurrency(goal.targetAmount) }}</span>
+                                </div>
+                                <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                                    <div class="bg-emerald-500 h-full transition-all duration-500" :style="{ width: Math.min((goal.currentAmount / (goal.targetAmount || 1)) * 100, 100) + '%' }"></div>
+                                </div>
+                                <div class="flex justify-between text-[11px] text-slate-400">
+                                    <span>{{ ((goal.currentAmount / (goal.targetAmount || 1)) * 100).toFixed(1) }}% atingido</span>
+                                    <span>Faltam {{ formatCurrency(Math.max(0, goal.targetAmount - goal.currentAmount)) }}</span>
+                                </div>
+                            </div>
+
+                            <div class="pt-2 border-t border-slate-100 flex justify-between items-center">
+                                <button @click="depositGoal(goal)" class="text-xs text-emerald-600 hover:text-emerald-700 font-bold flex items-center space-x-1">
+                                    <i class="fa-solid fa-circle-plus"></i>
+                                    <span>Adicionar Aporte</span>
+                                </button>
+                                <button @click="deleteGoal(goal.id)" class="text-xs text-slate-400 hover:text-rose-600">
+                                    Excluir
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'investimentos'" class="space-y-6">
+                    <!-- Investment Overview -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-6 rounded-2xl shadow-lg">
+                            <span class="text-xs text-indigo-300 font-semibold uppercase">Total Investido</span>
+                            <h3 class="text-3xl font-extrabold mt-2">{{ formatCurrency(totalInvested) }}</h3>
+                            <p class="text-xs text-slate-400 mt-2">Patrimônio em ativos financeiros</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                            <span class="text-xs text-slate-500 font-semibold uppercase">Rentabilidade Média Estimada</span>
+                            <h3 class="text-2xl font-bold text-emerald-600 mt-2">10.8% a.a.</h3>
+                            <p class="text-xs text-slate-400 mt-2">Superando a inflação acumulada</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-center">
+                            <button @click="openInvestModal()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-xl shadow transition-all flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-calculator"></i>
+                                <span>Simular Quantidade a Investir (%)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Asset List -->
+                    <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+                        <div class="p-5 border-b border-slate-100 flex justify-between items-center">
+                            <h4 class="font-bold text-slate-900 text-sm">Carteira de Ativos</h4>
+                            <button @click="openAddInvestmentModal" class="text-xs bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg font-semibold">
+                                + Novo Ativo
+                            </button>
+                        </div>
+                        <div class="divide-y divide-slate-100">
+                            <div v-for="inv in investments" :key="inv.id" class="p-4 flex justify-between items-center hover:bg-slate-50">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 font-bold flex items-center justify-center">
+                                        <i class="fa-solid fa-chart-pie"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="font-bold text-slate-900 text-sm">{{ inv.name }}</h5>
+                                        <span class="text-xs text-slate-500">{{ inv.category }}</span>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="font-bold text-slate-900 text-sm block">{{ formatCurrency(inv.amount) }}</span>
+                                    <button @click="deleteInvestment(inv.id)" class="text-[11px] text-rose-600 hover:underline">Remover</button>
+                                </div>
+                            </div>
+                            <div v-if="investments.length === 0" class="p-8 text-center text-slate-400 text-sm">
+                                Nenhum ativo cadastrado na carteira deste usuário.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'patrimonio'" class="space-y-6">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+                        <div>
+                            <span class="text-xs font-semibold text-slate-500 uppercase">Patrimônio Líquido Total</span>
+                            <h2 class="text-3xl font-black text-slate-900 mt-1">{{ formatCurrency(netWorth) }}</h2>
+                            <p class="text-xs text-slate-500 mt-1">Total de Ativos (Bens) menos Passivos (Dívidas)</p>
+                        </div>
+                        <div class="flex gap-4">
+                            <div class="bg-emerald-50 border border-emerald-200 px-4 py-3 rounded-xl">
+                                <span class="text-[10px] text-emerald-800 font-bold block">TOTAL ATIVOS</span>
+                                <span class="text-lg font-bold text-emerald-700">{{ formatCurrency(totalAssets) }}</span>
+                            </div>
+                            <div class="bg-rose-50 border border-rose-200 px-4 py-3 rounded-xl">
+                                <span class="text-[10px] text-rose-800 font-bold block">TOTAL PASSIVOS</span>
+                                <span class="text-lg font-bold text-rose-700">{{ formatCurrency(totalLiabilities) }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Assets -->
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h4 class="font-bold text-slate-900 text-sm flex items-center">
+                                    <i class="fa-solid fa-plus-circle text-emerald-600 mr-2"></i> Ativos & Bens
+                                </h4>
+                                <button @click="openAddAssetModal" class="text-xs text-emerald-600 font-semibold">+ Adicionar</button>
+                            </div>
+                            <div class="divide-y divide-slate-100">
+                                <div v-for="asset in assets" :key="asset.id" class="py-2.5 flex justify-between items-center text-xs">
+                                    <span class="font-medium text-slate-700">{{ asset.name }}</span>
+                                    <span class="font-bold text-slate-900">{{ formatCurrency(asset.value) }}</span>
+                                </div>
+                                <div v-if="assets.length === 0" class="py-4 text-center text-slate-400 text-xs">
+                                    Nenhum bem ou ativo cadastrado.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Liabilities -->
+                        <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+                            <div class="flex justify-between items-center">
+                                <h4 class="font-bold text-slate-900 text-sm flex items-center">
+                                    <i class="fa-solid fa-minus-circle text-rose-600 mr-2"></i> Passivos & Dívidas
+                                </h4>
+                                <button @click="openAddLiabilityModal" class="text-xs text-rose-600 font-semibold">+ Adicionar</button>
+                            </div>
+                            <div class="divide-y divide-slate-100">
+                                <div v-for="liab in liabilities" :key="liab.id" class="py-2.5 flex justify-between items-center text-xs">
+                                    <span class="font-medium text-slate-700">{{ liab.name }}</span>
+                                    <span class="font-bold text-rose-600">{{ formatCurrency(liab.value) }}</span>
+                                </div>
+                                <div v-if="liabilities.length === 0" class="py-4 text-center text-slate-400 text-xs">
+                                    Nenhuma dívida ou passivo cadastrado.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'calculadora'" class="space-y-6">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-900">Calculadora de Juros Compostos</h3>
+                            <p class="text-xs text-slate-500">Projete o crescimento do seu dinheiro com aportes mensais no longo prazo.</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Aporte Inicial (R$)</label>
+                                <input v-model.number="calc.initial" type="number" class="w-full p-2.5 bg-slate-50 border rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Aporte Mensal (R$)</label>
+                                <input v-model.number="calc.monthly" type="number" class="w-full p-2.5 bg-slate-50 border rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Taxa de Juros Anual (%)</label>
+                                <input v-model.number="calc.rate" type="number" step="0.1" class="w-full p-2.5 bg-slate-50 border rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Anos de Investimento</label>
+                                <input v-model.number="calc.years" type="number" class="w-full p-2.5 bg-slate-50 border rounded-xl text-sm">
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 text-white p-6 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                            <div>
+                                <span class="text-xs text-slate-400 block">Total Investido</span>
+                                <span class="text-xl font-bold">{{ formatCurrency(compoundResult.totalInvested) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-xs text-slate-400 block">Total em Juros</span>
+                                <span class="text-xl font-bold text-emerald-400">{{ formatCurrency(compoundResult.totalInterest) }}</span>
+                            </div>
+                            <div>
+                                <span class="text-xs text-slate-400 block">Valor Final Acumulado</span>
+                                <span class="text-2xl font-black text-emerald-300">{{ formatCurrency(compoundResult.finalAmount) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-if="activeTab === 'configuracoes'" class="space-y-6 max-w-2xl">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-6">
+                        <h3 class="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3">Configurações do Perfil</h3>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Seu Nome / Como prefere ser chamado(a)</label>
+                                <input v-model="user.name" @input="saveUserData" type="text" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Identificador Único (ID do Perfil)</label>
+                                <input :value="activeUserId" readonly type="text" class="w-full p-3 bg-slate-100 text-slate-500 border border-slate-200 rounded-xl text-xs font-mono select-all">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Moeda Principal</label>
+                                <select v-model="user.currency" @change="saveUserData" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                                    <option value="BRL">Real Brasileiro (R$)</option>
+                                    <option value="USD">Dólar Americano ($)</option>
+                                    <option value="EUR">Euro (€)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="pt-6 border-t border-slate-100 space-y-3">
+                            <h4 class="font-bold text-slate-900 text-sm">Gerenciamento do Perfil</h4>
+                            <div class="flex flex-wrap gap-3">
+                                <button @click="openSwitchUserModal" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs rounded-xl flex items-center space-x-1.5 shadow">
+                                    <i class="fa-solid fa-users-gear"></i>
+                                    <span>Trocar / Criar Outro Usuário</span>
+                                </button>
+                                <button @click="exportToExcel" class="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs rounded-xl flex items-center space-x-1.5 border border-emerald-200/60">
+                                    <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                                    <span>Exportar Excel (.xls)</span>
+                                </button>
+                                <button @click="confirmClearAll" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-xl">
+                                    <i class="fa-solid fa-triangle-exclamation mr-1"></i> Redefinir Apenas Meus Lançamentos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- 1. FIRST ACCESS / ONBOARDING MODAL -->
+        <div v-if="showOnboardingModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 text-center border border-slate-100 animate-fadeIn">
+                <div class="w-16 h-16 bg-emerald-500 text-white rounded-2xl flex items-center justify-center mx-auto text-2xl shadow-lg shadow-emerald-500/30">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+
+                <div class="space-y-2">
+                    <h2 class="text-2xl font-black text-slate-900 tracking-tight">Bem-vindo(a) ao SuOrganiza!</h2>
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        Seu assistente de controle financeiro pessoal. Digite seu nome para criar seu <strong>perfil individual zerado</strong>.
+                    </p>
+                </div>
+
+                <form @submit.prevent="submitOnboarding" class="space-y-4 text-left">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Seu Nome / Apelido</label>
+                        <input v-model.trim="newUserName" type="text" placeholder="Ex: João, Maria, Pedro..." :required="authMode === 'register'" autofocus
+                               class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none transition-all">
+                    </div>
+
+                    <template v-if="cloudReady">
+                        <div v-if="authMode === 'register'">
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">E-mail</label>
+                            <input v-model.trim="authEmail" type="email" placeholder="voce@email.com" required class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Senha</label>
+                            <input v-model="authPassword" type="password" placeholder="Mínimo de 6 caracteres" required minlength="6" class="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:bg-white focus:outline-none">
+                        </div>
+                        <div v-if="authError" class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{{ authError }}</div>
+                    </template>
+
+                    <div class="bg-emerald-50/70 border border-emerald-200/80 p-3 rounded-xl flex items-start space-x-2.5 text-xs text-emerald-900">
+                        <i class="fa-solid fa-shield-halved text-emerald-600 text-sm mt-0.5"></i>
+                        <span>Seu perfil iniciará completamente <strong>zerado (R$ 0,00)</strong> e seus dados ficarão salvos isoladamente.</span>
+                    </div>
+
+                    <button type="submit" :disabled="authLoading || (cloudReady && ((!authEmail.trim() || !authPassword) || (authMode === 'register' && !newUserName.trim()))) || (!cloudReady && !newUserName.trim())" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center space-x-2">
+                        <span>{{ authLoading ? 'Aguarde...' : (authMode === 'login' ? 'Entrar na Minha Conta' : 'Criar Minha Conta e Entrar') }}</span>
+                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </form>
+
+                <div v-if="cloudReady" class="text-xs text-slate-500">
+                    <button type="button" @click="authMode = authMode === 'register' ? 'login' : 'register'; authError = ''" class="text-emerald-700 font-bold hover:underline">
+                        {{ authMode === 'register' ? 'Já tenho uma conta. Entrar' : 'Ainda não tenho conta. Criar cadastro' }}
+                    </button>
+                </div>
+
+                <!-- Existing local profiles if any -->
+                <div v-if="profiles.length > 0" class="pt-4 border-t border-slate-100 text-left">
+                    <span class="text-xs font-bold text-slate-400 block mb-2">Ou selecione um perfil salvo neste navegador:</span>
+                    <div class="space-y-1.5 max-h-36 overflow-y-auto custom-scrollbar pr-1">
+                        <button v-for="p in profiles" :key="p.id" @click="switchUser(p.id)" class="w-full p-2.5 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 flex justify-between items-center text-xs font-semibold text-slate-800 transition-colors">
+                            <span><i class="fa-solid fa-user-check text-emerald-600 mr-2"></i>{{ p.name }}</span>
+                            <span class="text-[10px] text-slate-400 font-mono">{{ p.id }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MULTI-USER SWITCHER MODAL -->
+        <div v-if="showSwitchUserModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl relative space-y-5">
+                <button @click="showSwitchUserModal = false" class="absolute right-4 top-4 text-slate-400 hover:text-slate-600 p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-lg font-bold">
+                        <i class="fa-solid fa-users"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 leading-tight">Gerenciador de Perfis de Usuários</h3>
+                        <p class="text-xs text-slate-500">Alterne entre usuários ou crie um novo perfil zerado e isolado.</p>
+                    </div>
+                </div>
+
+                <!-- Existing profiles list -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Perfis Cadastrados</label>
+                    <div class="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                        <div v-for="p in profiles" :key="p.id" 
+                             :class="p.id === activeUserId ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-500' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'" 
+                             class="p-3 rounded-2xl border flex items-center justify-between transition-all">
+                            <div class="flex items-center space-x-3 truncate">
+                                <div class="w-8 h-8 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                    {{ p.name.substring(0,2).toUpperCase() }}
+                                </div>
+                                <div class="truncate">
+                                    <span class="text-xs font-bold text-slate-900 block truncate">{{ p.name }}</span>
+                                    <span class="text-[10px] text-slate-400 block font-mono">ID: {{ p.id }}</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span v-if="p.id === activeUserId" class="text-[10px] bg-emerald-600 text-white px-2 py-0.5 rounded-full font-bold">Em Uso</span>
+                                <button v-else @click="switchUser(p.id)" class="px-3 py-1.5 bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition-all">
+                                    Acessar
+                                </button>
+                                <button v-if="profiles.length > 1 && p.id !== activeUserId" @click="deleteUserProfile(p.id)" title="Excluir Perfil" class="p-1.5 text-slate-400 hover:text-rose-600 transition-colors">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Create new user input -->
+                <form @submit.prevent="handleCreateNewProfileInModal" class="pt-4 border-t border-slate-100 space-y-3">
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Criar Novo Perfil Isolado</label>
+                    <div class="flex space-x-2">
+                        <input v-model.trim="newUserNameInModal" type="text" placeholder="Nome do novo usuário..." required class="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        <button type="submit" :disabled="!newUserNameInModal.trim()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow">
+                            + Criar Zerado
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add / Edit Transaction Modal -->
+        <div v-if="showTxModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl relative my-8">
+                <button @click="showTxModal = false" class="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+
+                <h3 class="text-lg font-bold text-slate-900 mb-4">
+                    {{ isEditing ? 'Editar Lançamento' : 'Novo Lançamento' }}
+                </h3>
+
+                <form @submit.prevent="saveTransaction" class="space-y-4">
+                    <!-- Type selector -->
+                    <div class="grid grid-cols-2 gap-3 p-1 bg-slate-100 rounded-2xl">
+                        <button type="button" @click="txForm.type = 'receita'" :class="txForm.type === 'receita' ? 'bg-emerald-600 text-white shadow' : 'text-slate-600'" class="py-2 text-xs font-bold rounded-xl transition-all">
+                            <i class="fa-solid fa-arrow-down-left mr-1"></i> Receita
+                        </button>
+                        <button type="button" @click="txForm.type = 'despesa'" :class="txForm.type === 'despesa' ? 'bg-rose-600 text-white shadow' : 'text-slate-600'" class="py-2 text-xs font-bold rounded-xl transition-all">
+                            <i class="fa-solid fa-arrow-up-right mr-1"></i> Despesa
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Valor (R$)</label>
+                            <input v-model.number="txForm.amount" type="number" step="0.01" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Data</label>
+                            <input v-model="txForm.date" type="date" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Descrição</label>
+                        <input v-model="txForm.description" type="text" placeholder="Ex: Supermercado, Salário..." required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <!-- Category Selector -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Categoria</label>
+                        <select v-model="txForm.category" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
+                            <option v-for="cat in (txForm.type === 'receita' ? incomeCategories : expenseCategories)" :key="cat" :value="cat">
+                                {{ cat }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Receita Specific: Tipo de Renda -->
+                    <div v-if="txForm.type === 'receita'" class="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100 space-y-2">
+                        <label class="block text-xs font-bold text-emerald-900">Tipo de Renda</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button type="button" @click="txForm.incomeType = 'principal'" :class="txForm.incomeType === 'principal' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800 border border-emerald-200'" class="py-1.5 text-xs font-semibold rounded-lg">Principal</button>
+                            <button type="button" @click="txForm.incomeType = 'extra'" :class="txForm.incomeType === 'extra' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800 border border-emerald-200'" class="py-1.5 text-xs font-semibold rounded-lg">Extra</button>
+                            <button type="button" @click="txForm.incomeType = 'outro'" :class="txForm.incomeType === 'outro' ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800 border border-emerald-200'" class="py-1.5 text-xs font-semibold rounded-lg">Outro</button>
+                        </div>
+                    </div>
+
+                    <!-- Despesa Specific: Fixa vs Variável -->
+                    <div v-if="txForm.type === 'despesa'" class="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-800">É uma Despesa Fixa?</span>
+                            <input v-model="txForm.isFixed" type="checkbox" class="w-4 h-4 text-emerald-600 rounded">
+                        </div>
+                        <div v-if="txForm.isFixed" class="pt-2 border-t border-slate-200">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Dia do Vencimento (1-31)</label>
+                            <input v-model.number="txForm.dueDate" type="number" min="1" max="31" class="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-sm">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-4 border-t border-slate-100">
+                        <button type="button" @click="showTxModal = false" class="px-4 py-2.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-xl">Cancelar</button>
+                        <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow">Salvar Lançamento</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Invest Percent Simulator Modal -->
+        <div v-if="showInvestModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-5">
+                <button @click="showInvestModal = false" class="absolute right-4 top-4 text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+
+                <div class="text-center space-y-1">
+                    <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto text-xl font-bold">
+                        <i class="fa-solid fa-percent"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-900">Simulador de Aporte (% Investir)</h3>
+                    <p class="text-xs text-slate-500">Quanto da sua renda você deseja separar para o seu futuro?</p>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Base da Renda (R$)</label>
+                        <input v-model.number="investCalc.income" type="number" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                            <span>Percentual para Investir</span>
+                            <span class="text-emerald-600">{{ investCalc.percentage }}%</span>
+                        </div>
+                        <input v-model.number="investCalc.percentage" type="range" min="5" max="50" step="5" class="w-full accent-emerald-600">
+                    </div>
+
+                    <!-- Computed Breakdown -->
+                    <div class="bg-slate-900 text-white p-4 rounded-2xl space-y-3">
+                        <div class="flex justify-between items-center text-sm border-b border-slate-800 pb-2">
+                            <span>Valor Total do Aporte</span>
+                            <span class="font-black text-emerald-400 text-base">{{ formatCurrency(calculatedInvestAmount) }}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400 space-y-1">
+                            <div class="flex justify-between">
+                                <span>Renda Fixa / Emergência (50%):</span>
+                                <strong class="text-slate-200">{{ formatCurrency(calculatedInvestAmount * 0.5) }}</strong>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Ações / FIIs (30%):</span>
+                                <strong class="text-slate-200">{{ formatCurrency(calculatedInvestAmount * 0.3) }}</strong>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Internacional / Cripto (20%):</span>
+                                <strong class="text-slate-200">{{ formatCurrency(calculatedInvestAmount * 0.2) }}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button @click="autoApplyInvestment" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow">
+                    Registrar Aporte como Lançamento
+                </button>
+            </div>
+        </div>
+
+        <!-- Import Modal -->
+        <div v-if="showImportModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
+                <button @click="showImportModal = false" class="absolute right-4 top-4 text-slate-400">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+
+                <h3 class="text-lg font-bold text-slate-900">Importar Extrato Bancário</h3>
+                <p class="text-xs text-slate-500">Cole ou envie suas linhas em CSV ou formato do extrato (Data, Descrição, Valor).</p>
+
+                <textarea v-model="importText" rows="6" placeholder="2026-09-10, Supermercado, -150.00&#10;2026-09-12, Pix Recebido, 500.00" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono"></textarea>
+
+                <button @click="processImport" class="w-full py-3 bg-emerald-600 text-white text-xs font-bold rounded-xl shadow">
+                    Processar e Adicionar Lançamentos
+                </button>
+            </div>
+        </div>
+
+        <!-- Clear Confirm Modal -->
+        <div v-if="showClearConfirmModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
+                <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="text-base font-bold text-slate-900">Limpar todos os meus lançamentos?</h3>
+                <p class="text-xs text-slate-500">Esta ação irá apagar apenas os registros do usuário atual (<strong>{{ user.name }}</strong>). Esta ação não afetará outros usuários.</p>
+                <div class="flex space-x-3 pt-2">
+                    <button @click="showClearConfirmModal = false" class="flex-1 py-2.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-xl">Cancelar</button>
+                    <button @click="executeClearAll" class="flex-1 py-2.5 bg-rose-600 text-white text-xs font-bold rounded-xl shadow">Sim, Limpar</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Application Vue Logic Script -->
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                // Determine current year and month for initial view
+                const now = new Date();
+                const curY = now.getFullYear();
+                const curM = String(now.getMonth() + 1).padStart(2, '0');
+
+                return {
+                    mobileMenuOpen: false,
+                    activeTab: 'inicio',
+                    selectedMonth: `${curY}-${curM}`,
+                    
+                    // User Identification & Multi-Profile State
+                    activeUserId: null,
+                    profiles: [], // List of { id, name, currency, createdAt }
+                    showOnboardingModal: false,
+                    showSwitchUserModal: false,
+                    newUserName: '',
+                    newUserNameInModal: '',
+                    authMode: 'register',
+                    authEmail: '',
+                    authPassword: '',
+                    authLoading: false,
+                    authError: '',
+                    cloudReady: false,
+
+                    user: {
+                        name: '',
+                        currency: 'BRL'
+                    },
+
+                    navItems: [
+                        { id: 'inicio', label: 'Início / Visão Geral', icon: 'fa-solid fa-chart-line' },
+                        { id: 'historico', label: 'Lançamentos', icon: 'fa-solid fa-list-check' },
+                        { id: 'orcamento', label: 'Orçamento', icon: 'fa-solid fa-wallet' },
+                        { id: 'metas', label: 'Metas', icon: 'fa-solid fa-bullseye' },
+                        { id: 'investimentos', label: 'Investimentos', icon: 'fa-solid fa-arrow-trend-up' },
+                        { id: 'patrimonio', label: 'Patrimônio', icon: 'fa-solid fa-building-columns' },
+                        { id: 'calculadora', label: 'Calculadora', icon: 'fa-solid fa-calculator' },
+                        { id: 'configuracoes', label: 'Configurações', icon: 'fa-solid fa-gear' }
+                    ],
+
+                    // Categories
+                    incomeCategories: ['Salário', 'Freelance', 'Rendimentos', 'Venda', 'Outro'],
+                    expenseCategories: ['Moradia', 'Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Educação', 'Investimento', 'Outros'],
+
+                    // Filter state
+                    filters: {
+                        search: '',
+                        type: 'todos',
+                        category: 'todas'
+                    },
+
+                    // ALL FINANCIAL DATA INITIALIZED COMPLETELY CLEAN / ZERADO FOR NEW USERS
+                    transactions: [],
+                    budgets: [],
+                    goals: [],
+                    investments: [],
+                    assets: [],
+                    liabilities: [],
+
+                    // Calculators state
+                    calc: {
+                        initial: 1000,
+                        monthly: 500,
+                        rate: 10.5,
+                        years: 5
+                    },
+
+                    // Modal Control
+                    showTxModal: false,
+                    isEditing: false,
+                    txForm: {
+                        id: null,
+                        type: 'despesa',
+                        amount: '',
+                        date: '',
+                        description: '',
+                        category: 'Alimentação',
+                        incomeType: 'principal',
+                        isFixed: false,
+                        dueDate: 10
+                    },
+                    showInvestModal: false,
+                    investCalc: {
+                        income: 0,
+                        percentage: 20
+                    },
+                    showImportModal: false,
+                    importText: '',
+                    showClearConfirmModal: false,
+                    evolutionChartInstance: null,
+                    pieChartInstance: null
+                }
+            },
+
+            computed: {
+                currentTabTitle() {
+                    const found = this.navItems.find(i => i.id === this.activeTab);
+                    return found ? found.label : 'SuOrganiza';
+                },
+                formattedSelectedMonth() {
+                    if (!this.selectedMonth) return '';
+                    const [year, month] = this.selectedMonth.split('-');
+                    const date = new Date(year, month - 1);
+                    return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+                },
+                allCategories() {
+                    return [...new Set([...this.incomeCategories, ...this.expenseCategories])];
+                },
+                // Transactions for selected month
+                monthlyTransactions() {
+                    return this.transactions.filter(t => t.date && t.date.startsWith(this.selectedMonth));
+                },
+                monthlyIncome() {
+                    return this.monthlyTransactions
+                        .filter(t => t.type === 'receita')
+                        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+                },
+                monthlyIncomeCount() {
+                    return this.monthlyTransactions.filter(t => t.type === 'receita').length;
+                },
+                monthlyExpenses() {
+                    return this.monthlyTransactions
+                        .filter(t => t.type === 'despesa')
+                        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+                },
+                monthlyFixedExpenses() {
+                    return this.monthlyTransactions
+                        .filter(t => t.type === 'despesa' && t.isFixed)
+                        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+                },
+                monthlyVariableExpenses() {
+                    return this.monthlyTransactions
+                        .filter(t => t.type === 'despesa' && !t.isFixed)
+                        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+                },
+                monthlyBalance() {
+                    return this.monthlyIncome - this.monthlyExpenses;
+                },
+                savingsRate() {
+                    if (this.monthlyIncome <= 0) return 0;
+                    return Math.max(0, ((this.monthlyIncome - this.monthlyExpenses) / this.monthlyIncome) * 100);
+                },
+                filteredTransactions() {
+                    return this.monthlyTransactions.filter(t => {
+                        const matchesSearch = t.description.toLowerCase().includes(this.filters.search.toLowerCase()) ||
+                                              t.category.toLowerCase().includes(this.filters.search.toLowerCase());
+                        
+                        let matchesType = true;
+                        if (this.filters.type === 'receita') matchesType = t.type === 'receita';
+                        if (this.filters.type === 'despesa') matchesType = t.type === 'despesa';
+                        if (this.filters.type === 'fixa') matchesType = t.type === 'despesa' && t.isFixed;
+                        if (this.filters.type === 'variavel') matchesType = t.type === 'despesa' && !t.isFixed;
+
+                        let matchesCat = true;
+                        if (this.filters.category !== 'todas') matchesCat = t.category === this.filters.category;
+
+                        return matchesSearch && matchesType && matchesCat;
+                    });
+                },
+                recentFilteredTransactions() {
+                    return [...this.monthlyTransactions]
+                        .sort((a, b) => new Date(b.date) - new Date(a.date))
+                        .slice(0, 5);
+                },
+                totalInvested() {
+                    return this.investments.reduce((acc, i) => acc + Number(i.amount || 0), 0);
+                },
+                totalAssets() {
+                    return this.assets.reduce((acc, a) => acc + Number(a.value || 0), 0);
+                },
+                totalLiabilities() {
+                    return this.liabilities.reduce((acc, l) => acc + Number(l.value || 0), 0);
+                },
+                netWorth() {
+                    return this.totalAssets - this.totalLiabilities;
+                },
+                calculatedInvestAmount() {
+                    return ((this.investCalc.income || 0) * (this.investCalc.percentage || 0)) / 100;
+                },
+                compoundResult() {
+                    const p = Number(this.calc.initial) || 0;
+                    const pmt = Number(this.calc.monthly) || 0;
+                    const r = (Number(this.calc.rate) || 0) / 100 / 12;
+                    const n = (Number(this.calc.years) || 0) * 12;
+
+                    let balance = p;
+                    let totalInvested = p;
+
+                    for (let i = 0; i < n; i++) {
+                        balance = (balance + pmt) * (1 + r);
+                        totalInvested += pmt;
+                    }
+
+                    return {
+                        totalInvested,
+                        finalAmount: balance,
+                        totalInterest: Math.max(0, balance - totalInvested)
+                    };
+                }
+            },
+
+            async mounted() {
+                // O banco Supabase passa a ser a fonte principal dos dados.
+                if (supabaseClient) {
+                    this.cloudReady = true;
+                    supabaseClient.auth.onAuthStateChange((event, session) => {
+                        if (session && session.user) {
+                            setTimeout(() => this.loadCloudUser(session.user), 0);
+                        }
+                    });
+                    const { data: { session } } = await supabaseClient.auth.getSession();
+                    if (session && session.user) {
+                        await this.loadCloudUser(session.user);
+                    } else {
+                        this.showOnboardingModal = true;
+                    }
+                } else {
+                    // Fallback temporário para desenvolvimento: localStorage.
+                    this.loadProfilesAndActiveUser();
+                }
+
+                window.addEventListener('beforeunload', () => {
+                    this.saveUserData();
+                    this.persistProfiles();
+                });
+            },
+
+            watch: {
+                transactions: { deep: true, handler() { this.queueCloudSave(); } },
+                budgets: { deep: true, handler() { this.queueCloudSave(); } },
+                goals: { deep: true, handler() { this.queueCloudSave(); } },
+                investments: { deep: true, handler() { this.queueCloudSave(); } },
+                assets: { deep: true, handler() { this.queueCloudSave(); } },
+                liabilities: { deep: true, handler() { this.queueCloudSave(); } },
+                'user.name'() { this.queueCloudSave(); },
+                'user.currency'() { this.queueCloudSave(); },
+                monthlyTransactions: {
+                    deep: true,
+                    handler() {
+                        this.updateCharts();
+                    }
+                },
+                activeTab(val) {
+                    if (val === 'inicio') {
+                        this.$nextTick(() => this.initCharts());
+                    }
+                }
+            },
+
+            methods: {
+                generateUniqueUserId() {
+                    return 'usr_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 6);
+                },
+
+                // Camada de persistência centralizada. Nunca deixe o estado Vue ser a única fonte dos dados.
+                storageGet(key) {
+                    try {
+                        return localStorage.getItem(key);
+                    } catch (e) {
+                        console.error('Não foi possível ler o armazenamento local:', e);
+                        return null;
+                    }
+                },
+
+                storageSet(key, value) {
+                    try {
+                        localStorage.setItem(key, value);
+                        return true;
+                    } catch (e) {
+                        console.error('Não foi possível salvar no armazenamento local:', e);
+                        return false;
+                    }
+                },
+
+                storageRemove(key) {
+                    try {
+                        localStorage.removeItem(key);
+                    } catch (e) {
+                        console.error('Não foi possível remover do armazenamento local:', e);
+                    }
+                },
+
+                persistProfiles() {
+                    this.storageSet('suorganiza_profiles', JSON.stringify(this.profiles));
+                },
+
+                loadProfilesAndActiveUser() {
+                    try {
+                        const rawProfiles = this.storageGet('suorganiza_profiles');
+                        const savedProfiles = rawProfiles ? JSON.parse(rawProfiles) : [];
+                        this.profiles = Array.isArray(savedProfiles) ? savedProfiles : [];
+
+                        const activeId = this.storageGet('suorganiza_active_user_id');
+
+                        if (activeId && this.profiles.some(p => p.id === activeId)) {
+                            this.activeUserId = activeId;
+                            this.loadUserData(activeId);
+                            this.showOnboardingModal = false;
+                        } else if (this.profiles.length > 0) {
+                            // Recupera o primeiro perfil somente se existir um perfil salvo.
+                            this.activeUserId = this.profiles[0].id;
+                            this.storageSet('suorganiza_active_user_id', this.activeUserId);
+                            this.loadUserData(this.activeUserId);
+                            this.showOnboardingModal = false;
+                        } else {
+                            this.activeUserId = null;
+                            this.showOnboardingModal = true;
+                        }
+                    } catch (e) {
+                        console.error('Erro ao inicializar perfis:', e);
+                        this.profiles = [];
+                        this.activeUserId = null;
+                        this.showOnboardingModal = true;
+                    }
+                },
+
+                async createNewUserProfile(name) {
+                    const cleanName = name.trim();
+                    if (!cleanName) return;
+
+                    if (this.cloudReady) {
+                        await this.registerCloudUser(cleanName);
+                        return;
+                    }
+
+                    const newId = this.generateUniqueUserId();
+                    const newProfile = { id: newId, name: cleanName, currency: 'BRL', createdAt: new Date().toISOString() };
+                    this.profiles.push(newProfile);
+                    this.persistProfiles();
+                    this.activeUserId = newId;
+                    this.storageSet('suorganiza_active_user_id', newId);
+                    this.user = { name: cleanName, currency: 'BRL' };
+                    this.transactions = [];
+                    this.budgets = [];
+                    this.goals = [];
+                    this.investments = [];
+                    this.assets = [];
+                    this.liabilities = [];
+                    this.saveUserData();
+                    this.showOnboardingModal = false;
+                    this.showSwitchUserModal = false;
+                    this.newUserName = '';
+                    this.newUserNameInModal = '';
+                    this.$nextTick(() => this.initCharts());
+                },
+
+                async registerCloudUser(name) {
+                    this.authError = '';
+                    if (!supabaseClient) { this.authError = 'Supabase não está configurado no código.'; return; }
+                    if (!this.authEmail.trim() || this.authPassword.length < 6) {
+                        this.authError = 'Informe um e-mail válido e uma senha com pelo menos 6 caracteres.';
+                        return;
+                    }
+                    this.authLoading = true;
+                    try {
+                        const { data, error } = await supabaseClient.auth.signUp({
+                            email: this.authEmail.trim(),
+                            password: this.authPassword,
+                            options: { data: { name: name.trim() } }
+                        });
+                        if (error) throw error;
+                        if (!data.session) {
+                            this.authError = 'Cadastro criado. Verifique seu e-mail para confirmar a conta e depois entre no SuOrganiza.';
+                            this.authMode = 'login';
+                            return;
+                        }
+                        await this.loadCloudUser(data.user);
+                    } catch (e) {
+                        this.authError = e.message || 'Não foi possível criar sua conta.';
+                    } finally {
+                        this.authLoading = false;
+                    }
+                },
+
+                async loginCloudUser() {
+                    this.authError = '';
+                    if (!supabaseClient) { this.authError = 'Supabase não está configurado no código.'; return; }
+                    if (!this.authEmail.trim() || !this.authPassword) {
+                        this.authError = 'Informe seu e-mail e sua senha.';
+                        return;
+                    }
+                    this.authLoading = true;
+                    try {
+                        const { data, error } = await supabaseClient.auth.signInWithPassword({
+                            email: this.authEmail.trim(),
+                            password: this.authPassword
+                        });
+                        if (error) throw error;
+                        await this.loadCloudUser(data.user);
+                    } catch (e) {
+                        this.authError = e.message || 'E-mail ou senha inválidos.';
+                    } finally {
+                        this.authLoading = false;
+                    }
+                },
+
+                async loadCloudUser(authUser) {
+                    if (!authUser || !supabaseClient) return;
+                    try {
+                        this.activeUserId = authUser.id;
+                        const { data: profile, error: profileError } = await supabaseClient
+                            .from('profiles').select('*').eq('id', authUser.id).maybeSingle();
+                        if (profileError) throw profileError;
+
+                        const { data: cloudData, error: dataError } = await supabaseClient
+                            .from('user_data').select('*').eq('user_id', authUser.id).maybeSingle();
+                        if (dataError) throw dataError;
+
+                        const profileName = profile?.name || authUser.user_metadata?.name || 'Usuário';
+                        this.user = { name: profileName, currency: profile?.currency || 'BRL' };
+                        this.transactions = cloudData?.transactions || [];
+                        this.budgets = cloudData?.budgets || [];
+                        this.goals = cloudData?.goals || [];
+                        this.investments = cloudData?.investments || [];
+                        this.assets = cloudData?.assets || [];
+                        this.liabilities = cloudData?.liabilities || [];
+                        this.showOnboardingModal = false;
+                        this.authError = '';
+                        this.$nextTick(() => this.initCharts());
+                    } catch (e) {
+                        console.error('Erro ao carregar dados do Supabase:', e);
+                        this.authError = 'Não foi possível carregar seus dados. Verifique o banco Supabase.';
+                        this.showOnboardingModal = true;
+                    }
+                },
+
+                async logoutCloudUser() {
+                    if (!supabaseClient) return;
+                    await this.saveUserData();
+                    await supabaseClient.auth.signOut();
+                    this.activeUserId = null;
+                    this.user = { name: '', currency: 'BRL' };
+                    this.transactions = []; this.budgets = []; this.goals = [];
+                    this.investments = []; this.assets = []; this.liabilities = [];
+                    this.showOnboardingModal = true;
+                    this.authMode = 'login';
+                },
+
+                submitOnboarding() {
+                    if (this.authMode === 'login') {
+                        this.loginCloudUser();
+                    } else if (this.newUserName.trim()) {
+                        this.createNewUserProfile(this.newUserName);
+                    }
+                },
+
+                handleCreateNewProfileInModal() {
+                    if (this.newUserNameInModal.trim()) {
+                        this.createNewUserProfile(this.newUserNameInModal);
+                    }
+                },
+
+                switchUser(targetUserId) {
+                    if (this.activeUserId === targetUserId) {
+                        this.showSwitchUserModal = false;
+                        return;
+                    }
+
+                    // No modo Supabase, a conta autenticada é a identidade do usuário.
+                    if (this.cloudReady) { return; }
+                    if (this.activeUserId) { this.saveUserData(); }
+
+                    // Switch active user
+                    this.activeUserId = targetUserId;
+                    this.storageSet('suorganiza_active_user_id', targetUserId);
+
+                    // Load dataset belonging to the newly selected user ID
+                    this.loadUserData(targetUserId);
+
+                    this.showSwitchUserModal = false;
+                    this.showOnboardingModal = false;
+
+                    this.$nextTick(() => {
+                        this.initCharts();
+                    });
+                },
+
+                deleteUserProfile(userId) {
+                    if (confirm("Tem certeza que deseja remover este perfil de usuário? Todos os dados dele serão apagados.")) {
+                        this.storageRemove(`suorganiza_data_${userId}`);
+                        this.profiles = this.profiles.filter(p => p.id !== userId);
+                        this.persistProfiles();
+
+                        if (this.profiles.length === 0) {
+                            this.storageRemove('suorganiza_active_user_id');
+                            this.activeUserId = null;
+                            this.showOnboardingModal = true;
+                        } else if (this.activeUserId === userId) {
+                            this.switchUser(this.profiles[0].id);
+                        }
+                    }
+                },
+
+                openSwitchUserModal() {
+                    this.showSwitchUserModal = true;
+                },
+
+                queueCloudSave() {
+                    if (!this.cloudReady || !this.activeUserId || !supabaseClient) return;
+                    clearTimeout(this._cloudSaveTimer);
+                    this._cloudSaveTimer = setTimeout(() => this.saveUserData(), 500);
+                },
+
+                async saveUserData() {
+                    if (!this.activeUserId) return;
+
+                    if (this.cloudReady && supabaseClient) {
+                        try {
+                            const payload = {
+                                user_id: this.activeUserId,
+                                transactions: this.transactions || [],
+                                budgets: this.budgets || [],
+                                goals: this.goals || [],
+                                investments: this.investments || [],
+                                assets: this.assets || [],
+                                liabilities: this.liabilities || []
+                            };
+                            const { error: dataError } = await supabaseClient.from('user_data').upsert(payload, { onConflict: 'user_id' });
+                            if (dataError) throw dataError;
+
+                            const { error: profileError } = await supabaseClient.from('profiles').upsert({
+                                id: this.activeUserId, name: this.user.name || 'Usuário', currency: this.user.currency || 'BRL'
+                            }, { onConflict: 'id' });
+                            if (profileError) throw profileError;
+                            return;
+                        } catch (e) {
+                            console.error('Falha ao salvar no Supabase:', e);
+                            return;
+                        }
+                    }
+
+                    const payload = {
+                        user: this.user, transactions: this.transactions, budgets: this.budgets, goals: this.goals,
+                        investments: this.investments, assets: this.assets, liabilities: this.liabilities
+                    };
+                    try {
+                        if (!this.storageSet(`suorganiza_data_${this.activeUserId}`, JSON.stringify(payload))) {
+                            throw new Error('O navegador recusou o armazenamento dos dados.');
+                        }
+                        const profileObj = this.profiles.find(p => p.id === this.activeUserId);
+                        if (profileObj && profileObj.name !== this.user.name) { profileObj.name = this.user.name; this.persistProfiles(); }
+                    } catch (e) { console.error('Failed to save user data:', e); }
+                },
+
+                async loadUserData(userId) {
+                    if (!userId) return;
+                    if (this.cloudReady && supabaseClient) {
+                        const { data: authData } = await supabaseClient.auth.getUser();
+                        if (authData?.user) await this.loadCloudUser(authData.user);
+                        return;
+                    }
+                    try {
+                        const rawData = this.storageGet(`suorganiza_data_${userId}`);
+                        if (rawData) {
+                            const parsed = JSON.parse(rawData);
+                            if (parsed.user) this.user = parsed.user;
+                            this.transactions = parsed.transactions || []; this.budgets = parsed.budgets || [];
+                            this.goals = parsed.goals || []; this.investments = parsed.investments || [];
+                            this.assets = parsed.assets || []; this.liabilities = parsed.liabilities || [];
+                        } else {
+                            const profileObj = this.profiles.find(p => p.id === userId);
+                            this.user = { name: profileObj ? profileObj.name : 'Usuário', currency: 'BRL' };
+                            this.transactions = []; this.budgets = []; this.goals = []; this.investments = []; this.assets = []; this.liabilities = [];
+                        }
+                    } catch (e) { console.error('Failed to load user data:', e); }
+                },
+
+                getUserInitials() {
+                    if (!this.user.name) return 'SO';
+                    const parts = this.user.name.trim().split(' ');
+                    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+                    return parts[0].substr(0, 2).toUpperCase();
+                },
+
+                formatCurrency(val) {
+                    const num = Number(val) || 0;
+                    return new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: this.user.currency || 'BRL'
+                    }).format(num);
+                },
+
+                formatDate(dateStr) {
+                    if (!dateStr) return '';
+                    const [y, m, d] = dateStr.split('-');
+                    return `${d}/${m}/${y}`;
+                },
+
+                changeMonth(delta) {
+                    const [year, month] = this.selectedMonth.split('-').map(Number);
+                    const d = new Date(year, month - 1 + delta, 1);
+                    const yStr = d.getFullYear();
+                    const mStr = String(d.getMonth() + 1).padStart(2, '0');
+                    this.selectedMonth = `${yStr}-${mStr}`;
+                },
+
+                getCategoryIcon(cat) {
+                    const icons = {
+                        'Salário': 'fa-solid fa-money-bill-wave',
+                        'Freelance': 'fa-solid fa-laptop-code',
+                        'Moradia': 'fa-solid fa-house',
+                        'Alimentação': 'fa-solid fa-utensils',
+                        'Transporte': 'fa-solid fa-car',
+                        'Lazer': 'fa-solid fa-gamepad',
+                        'Saúde': 'fa-solid fa-heart-pulse',
+                        'Investimento': 'fa-solid fa-chart-line',
+                        'Educação': 'fa-solid fa-graduation-cap'
+                    };
+                    return icons[cat] || 'fa-solid fa-tag';
+                },
+
+                openAddModal(type = 'receita') {
+                    this.isEditing = false;
+                    const today = new Date().toISOString().split('T')[0];
+                    this.txForm = {
+                        id: Date.now(),
+                        type: type,
+                        amount: '',
+                        date: today.startsWith(this.selectedMonth) ? today : `${this.selectedMonth}-01`,
+                        description: '',
+                        category: type === 'receita' ? 'Salário' : 'Alimentação',
+                        incomeType: 'principal',
+                        isFixed: false,
+                        dueDate: 10
+                    };
+                    this.showTxModal = true;
+                },
+
+                openEditModal(tx) {
+                    this.isEditing = true;
+                    this.txForm = JSON.parse(JSON.stringify(tx));
+                    this.showTxModal = true;
+                },
+
+                saveTransaction() {
+                    if (this.isEditing) {
+                        const index = this.transactions.findIndex(t => t.id === this.txForm.id);
+                        if (index !== -1) {
+                            this.transactions[index] = { ...this.txForm };
+                        }
+                    } else {
+                        this.transactions.push({ ...this.txForm, id: Date.now() });
+                    }
+                    this.saveUserData();
+                    this.showTxModal = false;
+                },
+
+                deleteTransaction(id) {
+                    this.transactions = this.transactions.filter(t => t.id !== id);
+                    this.saveUserData();
+                },
+
+                openInvestModal() {
+                    this.investCalc.income = this.monthlyIncome || 0;
+                    this.showInvestModal = true;
+                },
+
+                autoApplyInvestment() {
+                    if (this.calculatedInvestAmount <= 0) return;
+                    const today = new Date().toISOString().split('T')[0];
+                    this.transactions.push({
+                        id: Date.now(),
+                        date: today.startsWith(this.selectedMonth) ? today : `${this.selectedMonth}-01`,
+                        description: `Aporte de Investimento (${this.investCalc.percentage}%)`,
+                        amount: this.calculatedInvestAmount,
+                        type: 'despesa',
+                        category: 'Investimento',
+                        isFixed: false
+                    });
+                    this.saveUserData();
+                    this.showInvestModal = false;
+                },
+
+                openImportModal() {
+                    this.importText = '';
+                    this.showImportModal = true;
+                },
+
+                processImport() {
+                    if (!this.importText.trim()) return;
+                    const lines = this.importText.split('\n');
+                    lines.forEach(line => {
+                        const parts = line.split(',');
+                        if (parts.length >= 3) {
+                            const date = parts[0].trim();
+                            const description = parts[1].trim();
+                            const valStr = parts[2].trim();
+                            const val = parseFloat(valStr);
+                            if (!isNaN(val)) {
+                                this.transactions.push({
+                                    id: Date.now() + Math.random(),
+                                    date: date || `${this.selectedMonth}-01`,
+                                    description: description || 'Importado',
+                                    amount: Math.abs(val),
+                                    type: val >= 0 ? 'receita' : 'despesa',
+                                    category: val >= 0 ? 'Outro' : 'Outros',
+                                    isFixed: false
+                                });
+                            }
+                        }
+                    });
+                    this.saveUserData();
+                    this.showImportModal = false;
+                },
+
+                confirmClearAll() {
+                    this.showClearConfirmModal = true;
+                },
+
+                executeClearAll() {
+                    this.transactions = [];
+                    this.saveUserData();
+                    this.showClearConfirmModal = false;
+                },
+
+                // Budgets helper
+                openBudgetModal() {
+                    const cat = prompt("Selecione/Digite a Categoria:", "Alimentação");
+                    if (cat) {
+                        const limit = parseFloat(prompt(`Digite o teto máximo mensal para "${cat}" (R$):`, "1000") || "0");
+                        if (limit > 0) {
+                            const existing = this.budgets.find(b => b.category === cat);
+                            if (existing) existing.limit = limit;
+                            else this.budgets.push({ category: cat, limit });
+                            this.saveUserData();
+                        }
+                    }
+                },
+
+                getSpentByCategory(cat) {
+                    return this.monthlyTransactions
+                        .filter(t => t.type === 'despesa' && t.category === cat)
+                        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+                },
+
+                getBudgetStatusClass(b) {
+                    const spent = this.getSpentByCategory(b.category);
+                    return spent > b.limit ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700';
+                },
+
+                getBudgetBarColor(b) {
+                    const spent = this.getSpentByCategory(b.category);
+                    return spent > b.limit ? 'bg-rose-500' : 'bg-emerald-500';
+                },
+
+                // Goals & Investments helper
+                openAddGoalModal() {
+                    const title = prompt("Nome da Meta (ex: Viagem, Reserva):");
+                    if (title) {
+                        const target = parseFloat(prompt("Valor Alvo (R$):") || "0");
+                        if (target > 0) {
+                            this.goals.push({
+                                id: Date.now(),
+                                title,
+                                targetAmount: target,
+                                currentAmount: 0,
+                                deadline: '2027-12-31',
+                                icon: 'fa-solid fa-bullseye'
+                            });
+                            this.saveUserData();
+                        }
+                    }
+                },
+
+                depositGoal(goal) {
+                    const amount = parseFloat(prompt(`Quanto deseja depositar para "${goal.title}"?`) || "0");
+                    if (amount > 0) {
+                        goal.currentAmount += amount;
+                        this.saveUserData();
+                    }
+                },
+
+                deleteGoal(id) {
+                    this.goals = this.goals.filter(g => g.id !== id);
+                    this.saveUserData();
+                },
+
+                openAddInvestmentModal() {
+                    const name = prompt("Nome do Ativo (ex: Tesouro Selic, PETR4):");
+                    if (name) {
+                        const amount = parseFloat(prompt("Valor Investido (R$):") || "0");
+                        this.investments.push({
+                            id: Date.now(),
+                            name,
+                            category: 'Ativo Financeiro',
+                            amount
+                        });
+                        this.saveUserData();
+                    }
+                },
+
+                deleteInvestment(id) {
+                    this.investments = this.investments.filter(i => i.id !== id);
+                    this.saveUserData();
+                },
+
+                openAddAssetModal() {
+                    const name = prompt("Nome do Ativo/Bem (ex: Veículo):");
+                    if (name) {
+                        const value = parseFloat(prompt("Valor Estimado (R$):") || "0");
+                        this.assets.push({ id: Date.now(), name, value });
+                        this.saveUserData();
+                    }
+                },
+
+                openAddLiabilityModal() {
+                    const name = prompt("Nome da Dívida/Passivo (ex: Empréstimo):");
+                    if (name) {
+                        const value = parseFloat(prompt("Valor Devido (R$):") || "0");
+                        this.liabilities.push({ id: Date.now(), name, value });
+                        this.saveUserData();
+                    }
+                },
+
+                exportToExcel() {
+                    const dataToExport = this.monthlyTransactions.length > 0 ? this.monthlyTransactions : this.transactions;
+                    if (!dataToExport || dataToExport.length === 0) {
+                        alert('Nenhum lançamento registrado para exportar.');
+                        return;
+                    }
+
+                    const periodStr = this.formattedSelectedMonth || 'Geral';
+                    const userName = this.user.name || 'Usuário';
+                    const currentDate = new Date().toLocaleDateString('pt-BR');
+
+                    const totalIncome = dataToExport.filter(t => t.type === 'receita').reduce((a, b) => a + Number(b.amount || 0), 0);
+                    const totalExpenses = dataToExport.filter(t => t.type === 'despesa').reduce((a, b) => a + Number(b.amount || 0), 0);
+                    const netBalance = totalIncome - totalExpenses;
+
+                    let excelContent = `
+                    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+                    <head>
+                        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+                        <style>
+                            body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; }
+                            .title-row { background-color: #0f172a; color: #ffffff; font-size: 16pt; font-weight: bold; text-align: center; height: 40px; vertical-align: middle; }
+                            .subtitle-row { background-color: #1e293b; color: #94a3b8; font-size: 10pt; text-align: center; height: 24px; vertical-align: middle; }
+                            .info-label { font-weight: bold; background-color: #f1f5f9; color: #475569; font-size: 10pt; padding: 6px; border: 1px solid #cbd5e1; }
+                            .info-value { background-color: #ffffff; color: #0f172a; font-size: 10pt; padding: 6px; border: 1px solid #cbd5e1; }
+                            .th-header { background-color: #15803d; color: #ffffff; font-size: 11pt; font-weight: bold; text-align: center; border: 1px solid #166534; height: 32px; vertical-align: middle; }
+                            .td-cell { border: 1px solid #e2e8f0; font-size: 10pt; padding: 8px; vertical-align: middle; }
+                            .td-date { text-align: center; border: 1px solid #e2e8f0; font-size: 10pt; padding: 8px; vertical-align: middle; }
+                            .td-center { text-align: center; border: 1px solid #e2e8f0; font-size: 10pt; padding: 8px; vertical-align: middle; }
+                            .td-num { text-align: right; border: 1px solid #e2e8f0; font-size: 10pt; padding: 8px; vertical-align: middle; font-family: 'Consolas', monospace; }
+                            .receita-val { color: #15803d; font-weight: bold; }
+                            .despesa-val { color: #b91c1c; font-weight: bold; }
+                            .summary-total { font-weight: bold; background-color: #f8fafc; font-size: 11pt; }
+                        </style>
+                    </head>
+                    <body>
+                        <table>
+                            <tr>
+                                <td colspan="6" class="title-row">SuOrganiza &bull; Controle Financeiro Pessoal</td>
+                            </tr>
+                            <tr>
+                                <td colspan="6" class="subtitle-row">Relatório Detalhado do Usuário: ${userName}</td>
+                            </tr>
+                            <tr><td colspan="6"></td></tr>
+
+                            <tr>
+                                <td class="info-label">Período:</td>
+                                <td class="info-value">${periodStr}</td>
+                                <td class="info-label">Usuário:</td>
+                                <td class="info-value">${userName}</td>
+                                <td class="info-label">Data de Emissão:</td>
+                                <td class="info-value">${currentDate}</td>
+                            </tr>
+                            <tr><td colspan="6"></td></tr>
+
+                            <thead>
+                                <tr>
+                                    <th class="th-header">Data</th>
+                                    <th class="th-header">Descrição</th>
+                                    <th class="th-header">Categoria</th>
+                                    <th class="th-header">Tipo</th>
+                                    <th class="th-header">Detalhes</th>
+                                    <th class="th-header">Valor (R$)</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+
+                    dataToExport.forEach((t, index) => {
+                        const bgStyle = index % 2 === 0 ? 'background-color: #ffffff;' : 'background-color: #f8fafc;';
+                        const dateFormatted = this.formatDate(t.date);
+                        const isReceita = t.type === 'receita';
+                        const typeLabel = isReceita ? 'Receita' : 'Despesa';
+                        let details = isReceita 
+                            ? (t.incomeType ? `Renda ${t.incomeType}` : 'Geral')
+                            : (t.isFixed ? `Fixa (Venc: dia ${t.dueDate || 10})` : 'Variável');
+
+                        const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.amount || 0);
+
+                        excelContent += `
+                                <tr style="${bgStyle}">
+                                    <td class="td-date">${dateFormatted}</td>
+                                    <td class="td-cell">${t.description || ''}</td>
+                                    <td class="td-cell">${t.category || ''}</td>
+                                    <td class="td-center"><span style="color: ${isReceita ? '#15803d' : '#b91c1c'}; font-weight: bold;">${typeLabel}</span></td>
+                                    <td class="td-cell">${details}</td>
+                                    <td class="td-num ${isReceita ? 'receita-val' : 'despesa-val'}">${isReceita ? '+' : '-'} ${formattedVal}</td>
+                                </tr>`;
+                    });
+
+                    const formattedIncome = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalIncome);
+                    const formattedExpenses = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalExpenses);
+                    const formattedNet = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(netBalance);
+
+                    excelContent += `
+                                <tr><td colspan="6"></td></tr>
+                                <tr class="summary-total">
+                                    <td colspan="4" class="td-cell" style="text-align: right; font-weight: bold;">TOTAL DE ENTRADAS:</td>
+                                    <td colspan="2" class="td-num receita-val">+ ${formattedIncome}</td>
+                                </tr>
+                                <tr class="summary-total">
+                                    <td colspan="4" class="td-cell" style="text-align: right; font-weight: bold;">TOTAL DE SAÍDAS:</td>
+                                    <td colspan="2" class="td-num despesa-val">- ${formattedExpenses}</td>
+                                </tr>
+                                <tr class="summary-total">
+                                    <td colspan="4" class="td-cell" style="text-align: right; font-weight: bold;">SALDO LÍQUIDO DO PERÍODO:</td>
+                                    <td colspan="2" class="td-num ${netBalance >= 0 ? 'receita-val' : 'despesa-val'}">${netBalance >= 0 ? '+' : ''} ${formattedNet}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </body>
+                    </html>`;
+
+                    const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                    const link = document.createElement("a");
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", `SuOrganiza_${userName}_Relatorio_${this.selectedMonth}.xls`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                },
+
+                // Chart.js initialization
+                initCharts() {
+                    const evoCtx = document.getElementById('monthlyEvolutionChart');
+                    const catCtx = document.getElementById('categoryPieChart');
+
+                    if (evoCtx) {
+                        if (this.evolutionChartInstance) this.evolutionChartInstance.destroy();
+                        this.evolutionChartInstance = new Chart(evoCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: ['Entradas', 'Saídas'],
+                                datasets: [
+                                    { 
+                                        label: 'Valores do Mês (R$)', 
+                                        data: [this.monthlyIncome, this.monthlyExpenses], 
+                                        backgroundColor: ['#22c55e', '#f43f5e'], 
+                                        borderRadius: 8 
+                                    }
+                                ]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false }
+                        });
+                    }
+
+                    if (catCtx) {
+                        if (this.pieChartInstance) this.pieChartInstance.destroy();
+                        const catData = {};
+                        this.monthlyTransactions.filter(t => t.type === 'despesa').forEach(t => {
+                            catData[t.category] = (catData[t.category] || 0) + Number(t.amount || 0);
+                        });
+
+                        const hasData = Object.keys(catData).length > 0;
+
+                        this.pieChartInstance = new Chart(catCtx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: hasData ? Object.keys(catData) : ['Sem Despesas Registradas'],
+                                datasets: [{
+                                    data: hasData ? Object.values(catData) : [1],
+                                    backgroundColor: hasData 
+                                        ? ['#f43f5e', '#3b82f6', '#f59e0b', '#8b5cf6', '#10b981', '#64748b']
+                                        : ['#e2e8f0']
+                                }]
+                            },
+                            options: { responsive: true, maintainAspectRatio: false }
+                        });
+                    }
+                },
+
+                updateCharts() {
+                    this.$nextTick(() => {
+                        this.initCharts();
+                    });
+                },
+
+                resetFilters() {
+                    this.filters = { search: '', type: 'todos', category: 'todas' };
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
