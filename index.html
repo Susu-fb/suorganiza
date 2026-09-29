@@ -764,6 +764,9 @@
                                 <button @click="confirmClearAll" class="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs rounded-xl">
                                     <i class="fa-solid fa-triangle-exclamation mr-1"></i> Redefinir Apenas Meus Lançamentos
                                 </button>
+                                <button v-if="cloudReady" @click="openDeleteAccountModal" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs rounded-xl shadow-sm">
+                                    <i class="fa-solid fa-user-xmark mr-1"></i> Excluir Minha Conta
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -1079,6 +1082,30 @@
             </div>
         </div>
 
+        <!-- Delete Account Confirm Modal -->
+        <div v-if="showDeleteAccountModal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+            <div class="bg-white rounded-3xl max-w-md w-full p-7 shadow-2xl space-y-5 text-center border border-rose-100">
+                <div class="w-14 h-14 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-user-xmark"></i>
+                </div>
+                <div class="space-y-2">
+                    <h3 class="text-xl font-black text-slate-900">Excluir minha conta?</h3>
+                    <p class="text-xs text-slate-500 leading-relaxed">Esta ação é permanente. Sua conta de acesso e todos os dados financeiros associados a ela serão apagados e não poderão ser recuperados.</p>
+                </div>
+                <div class="bg-rose-50 border border-rose-200 rounded-2xl p-3 text-left text-xs text-rose-900">
+                    <strong>Para confirmar, digite EXCLUIR abaixo.</strong>
+                </div>
+                <input v-model.trim="deleteAccountConfirmation" type="text" autocomplete="off" placeholder="Digite EXCLUIR" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 text-center uppercase focus:ring-2 focus:ring-rose-500 focus:outline-none">
+                <div v-if="authError" class="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3">{{ authError }}</div>
+                <div class="flex gap-3 pt-1">
+                    <button @click="closeDeleteAccountModal" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl">Cancelar</button>
+                    <button @click="deleteCloudAccount" :disabled="deleteAccountConfirmation !== 'EXCLUIR' || authLoading" class="flex-1 py-3 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl shadow">
+                        {{ authLoading ? 'Excluindo...' : 'Excluir definitivamente' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Clear Confirm Modal -->
         <div v-if="showClearConfirmModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
@@ -1126,6 +1153,8 @@
                     authError: '',
                     cloudReady: false,
                     showEmailVerification: false,
+                    showDeleteAccountModal: false,
+                    deleteAccountConfirmation: '',
 
                     user: {
                         name: '',
@@ -1538,6 +1567,62 @@
                         console.error('Erro ao carregar dados do Supabase:', e);
                         this.authError = 'Não foi possível carregar seus dados. Verifique o banco Supabase.';
                         this.showOnboardingModal = true;
+                    }
+                },
+
+                openDeleteAccountModal() {
+                    this.authError = '';
+                    this.deleteAccountConfirmation = '';
+                    this.showDeleteAccountModal = true;
+                },
+
+                closeDeleteAccountModal() {
+                    if (this.authLoading) return;
+                    this.showDeleteAccountModal = false;
+                    this.deleteAccountConfirmation = '';
+                    this.authError = '';
+                },
+
+                async deleteCloudAccount() {
+                    this.authError = '';
+                    if (!supabaseClient || !this.cloudReady || !this.activeUserId) {
+                        this.authError = 'Não foi possível identificar sua conta.';
+                        return;
+                    }
+                    if (this.deleteAccountConfirmation !== 'EXCLUIR') {
+                        this.authError = 'Digite EXCLUIR para confirmar.';
+                        return;
+                    }
+
+                    this.authLoading = true;
+                    try {
+                        // A função SQL executa a exclusão no Auth de forma segura.
+                        // profiles e user_data usam ON DELETE CASCADE.
+                        const { error } = await supabaseClient.rpc('delete_my_account');
+                        if (error) throw error;
+
+                        await supabaseClient.auth.signOut();
+                        clearTimeout(this._cloudSaveTimer);
+                        this.activeUserId = null;
+                        this.user = { name: '', currency: 'BRL' };
+                        this.transactions = [];
+                        this.budgets = [];
+                        this.goals = [];
+                        this.investments = [];
+                        this.assets = [];
+                        this.liabilities = [];
+                        this.showDeleteAccountModal = false;
+                        this.deleteAccountConfirmation = '';
+                        this.showOnboardingModal = true;
+                        this.authMode = 'register';
+                        this.authEmail = '';
+                        this.authPassword = '';
+                        this.authError = '';
+                    } catch (e) {
+                        console.error('Erro ao excluir conta:', e);
+                        this.authError = e.message || 'Não foi possível excluir sua conta.';
+                    } finally {
+                        this.authLoading = false;
                     }
                 },
 
